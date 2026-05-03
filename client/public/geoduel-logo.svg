@@ -1,0 +1,26 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">GeoDuel logo</title>
+  <desc id="desc">A glowing globe crossed by a sword.</desc>
+  <defs>
+    <linearGradient id="globe" x1="23" y1="18" x2="101" y2="111" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5EE7FF"/>
+      <stop offset="0.48" stop-color="#456DFF"/>
+      <stop offset="1" stop-color="#8E5CFF"/>
+    </linearGradient>
+    <linearGradient id="blade" x1="94" y1="12" x2="41" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.5" stop-color="#BBD7FF"/>
+      <stop offset="1" stop-color="#6EE7FF"/>
+    </linearGradient>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#4D8CFF" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="#090B18"/>
+  <circle cx="60" cy="66" r="42" fill="url(#globe)" filter="url(#glow)"/>
+  <path d="M25 66h70M60 24c-13 13-19 27-19 42s6 29 19 42M60 24c13 13 19 27 19 42s-6 29-19 42M20 66c14-8 28-12 40-12s26 4 40 12M20 66c14 8 28 12 40 12s26-4 40-12" stroke="white" stroke-opacity="0.34" stroke-width="4" stroke-linecap="round"/>
+  <path d="M99 14l-8 30-38 45-11-11 45-38 12-26Z" fill="url(#blade)" stroke="#F4FBFF" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M43 82l-14 14M35 75l17 17" stroke="#FFCE6B" stroke-width="7" stroke-linecap="round"/>
+  <path d="M25 101l19-19" stroke="#FFE5A7" stroke-width="4" stroke-linecap="round"/>
+</svg>

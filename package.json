@@ -1,0 +1,44 @@
+{
+  "name": "geoduel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run server:dev\" \"npm run client:dev\"",
+    "client:dev": "vite --config client/vite.config.ts --host 0.0.0.0",
+    "server:dev": "tsx watch server/src/index.ts",
+    "build": "npm run client:build && npm run server:build",
+    "client:build": "vite build --config client/vite.config.ts",
+    "server:build": "tsc -p server/tsconfig.json",
+    "start": "node dist/server/src/index.js",
+    "typecheck": "tsc -p server/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
+    "validate": "tsx tools/validate.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "cors": "^2.8.5",
+    "d3-geo": "^3.1.1",
+    "express": "^4.19.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/d3-geo": "^3.1.0",
+    "@types/express": "^4.17.21",
+    "@types/geojson": "^7946.0.14",
+    "@types/node": "^20.11.30",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@types/topojson-client": "^3.1.4",
+    "concurrently": "^8.2.2",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.2",
+    "vite": "^5.1.6"
+  }
+}

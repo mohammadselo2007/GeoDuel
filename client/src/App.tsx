@@ -57,6 +57,7 @@ import {
 import { playSound } from "./lib/sound";
 import { socket } from "./lib/socket";
 import {
+  consumeAuthRedirectSession,
   getStoredSession,
   isAuthConfigured,
   signInWithEmail,
@@ -209,6 +210,18 @@ export default function App() {
   const leaderboard = useMemo<LeaderboardEntry[]>(() => getLeaderboard(), [profile, leaderboardVersion]);
   const effectiveClientId = authSession?.user.id ?? clientId;
   const authToken = authSession?.accessToken;
+
+  useEffect(() => {
+    consumeAuthRedirectSession()
+      .then((session) => {
+        if (!session) return;
+        setAuthSession(session);
+        setMessage("Email confirmed. You're signed in to GeoDuel.");
+      })
+      .catch((err) => {
+        setMessage(err instanceof Error ? err.message : "Email confirmation could not be completed.");
+      });
+  }, []);
 
   useEffect(() => {
     trackEvent("page_visit", { path: routePath });

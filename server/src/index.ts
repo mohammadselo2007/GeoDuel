@@ -154,15 +154,17 @@ interface RankedQueueEntry {
 const rooms = new Map<string, InternalRoom>();
 const rankedQueue = new Map<string, RankedQueueEntry>();
 const presence = new Map<string, { status: PresenceStatus; roomCode?: string; updatedAt: number }>();
+const DEFAULT_ALLOWED_ORIGINS = ["https://geo-duel.vercel.app", "http://localhost:5173"];
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "")
+const configuredOrigins = (process.env.CLIENT_ORIGIN ?? "")
   .split(",")
   .map(normalizeOrigin)
   .filter(Boolean);
+const allowedOrigins = [...new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins].map(normalizeOrigin).filter(Boolean))];
 const corsOrigin: cors.CorsOptions["origin"] =
   allowedOrigins.length > 0
     ? (origin, callback) => {

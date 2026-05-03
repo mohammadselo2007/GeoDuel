@@ -133,6 +133,8 @@ GeoDuel includes `vercel.json` so `/join/ROOMCODE`, `/admin`, `/privacy`, and `/
 
 Important: Vite bakes `VITE_*` values into the frontend bundle. After changing any Vercel env var, redeploy the Vercel project.
 
+Supabase email confirmation: hosted Supabase projects usually require email confirmation by default. GeoDuel now consumes the confirmation redirect token from the URL, stores the session, and signs the player in automatically after they click the email link.
+
 ## Production Fix Checklist
 
 For the current Supabase project, use this exact URL:
@@ -372,3 +374,5 @@ VITE_SUPABASE_ANON_KEY=
 - **Frontend cannot reach backend:** Set Vercel `VITE_SERVER_URL` to Render URL and Render `CLIENT_ORIGIN` to Vercel URL.
 - **CORS errors:** `CLIENT_ORIGIN` must include the exact deployed frontend origin. GeoDuel normalizes trailing slashes and shares the same allowlist between Express and Socket.IO.
 - **Supabase DNS error:** `VITE_SUPABASE_URL` is wrong. Copy the exact project URL from Supabase, then redeploy Vercel.
+- **Authentication failed after signup:** Confirm the email link first. If Supabase redirects back to GeoDuel with an access token, the app stores that session automatically.
+- **Invalid login credentials:** The email/password is wrong or the email has not been confirmed yet. Supabase Auth logs will show `invalid_credentials` for this case.

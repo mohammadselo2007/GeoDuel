@@ -1,5 +1,5 @@
 import cors from "cors";
-import express, { type Request } from "express";
+import express, { type Request, type Response } from "express";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -40,6 +40,7 @@ import {
   getActiveBan,
   getAdminContext,
   getAuditLogs,
+  getAnalyticsSummary,
   getLeaderboard,
   getOrCreateProfile,
   getProfile,
@@ -59,6 +60,7 @@ import {
   setUserRoleAndPermissions,
   summaryFromStoredProfile,
   unbanUser,
+  updateUserRating,
   upsertProfile,
   verifyAuthToken,
   writeAuditLog,
@@ -274,15 +276,18 @@ app.get("/api/friends", async (req, res) => {
 });
 
 app.post("/api/friends/request", async (req, res) => {
-  const user = await getRequestUser(req);
-  if (!user) return res.status(401).json({ message: "Authentication required." });
-  const targetUserId = sanitizeUserId(req.body?.targetUserId);
-  if (!targetUserId || targetUserId === user.id) {
-    res.status(400).json({ message: "Choose another player." });
-    return;
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ message: "Authentication required." });
+    const targetUserId = sanitizeUserId(req.body?.targetUserId);
+    if (!targetUserId || targetUserId === user.id) {
+      res.status(400).json({ message: "Choose another player." });
+      return;
+    }
+    res.json(await sendFriendRequest(user.id, targetUserId));
+  } catch (err) {
+    sendApiError(res, err, "Friend request failed.");
   }
-  await sendFriendRequest(user.id, targetUserId);
-  res.status(204).end();
 });
 
 app.post("/api/friends/requests/:requestId/accept", async (req, res) => {
@@ -378,6 +383,24 @@ app.get("/api/admin/audit", async (req, res) => {
   res.json(await getAuditLogs());
 });
 
+app.get("/api/admin/analytics", async (req, res) => {
+  const context = await getAdminContext(await getRequestUser(req), getAdminToken(req));
+  if (!hasPermission(context, "view_analytics")) {
+    res.status(403).json({ message: "Missing analytics permission." });
+    return;
+  }
+  res.json(await getAnalyticsSummary());
+});
+
+app.get("/api/admin/rooms", async (req, res) => {
+  const context = await getAdminContext(await getRequestUser(req), getAdminToken(req));
+  if (!hasPermission(context, "view_active_rooms")) {
+    res.status(403).json({ message: "Missing active rooms permission." });
+    return;
+  }
+  res.json([...rooms.values()].map(toAdminRoomSummary));
+});
+
 app.post("/api/admin/ban", async (req, res) => {
   const context = await getAdminContext(await getRequestUser(req), getAdminToken(req));
   if (!hasPermission(context, "ban_users")) {
@@ -400,6 +423,23 @@ app.post("/api/admin/unban", async (req, res) => {
   if (!targetUserId) return res.status(400).json({ message: "Target user is required." });
   await unbanUser(context.user?.id, targetUserId);
   res.status(204).end();
+});
+
+app.post("/api/admin/users/:userId/rating", async (req, res) => {
+  const context = await getAdminContext(await getRequestUser(req), getAdminToken(req));
+  if (!hasPermission(context, "edit_elo")) {
+    res.status(403).json({ message: "Missing Elo edit permission." });
+    return;
+  }
+  const targetUserId = sanitizeUserId(req.params.userId);
+  const rating = Number(req.body?.rating);
+  if (!targetUserId || !Number.isFinite(rating)) {
+    res.status(400).json({ message: "User and numeric Elo rating are required." });
+    return;
+  }
+  const updated = await updateUserRating(context.user?.id, targetUserId, rating, String(req.body?.reason ?? ""));
+  if (!updated) return res.status(404).json({ message: "User not found." });
+  res.json(toClientProfile(updated));
 });
 
 app.post("/api/admin/roles", async (req, res) => {
@@ -1619,6 +1659,27 @@ function toPublicState(room: InternalRoom, now = Date.now()): PublicGameState {
   };
 }
 
+function toAdminRoomSummary(room: InternalRoom) {
+  return {
+    roomCode: room.roomCode,
+    matchType: room.matchType,
+    status: room.status,
+    phase: room.phase,
+    playerCount: room.players.length,
+    activePlayerId: room.activePlayerId,
+    roundNumber: room.roundNumber,
+    countryPool: room.settings.countryPool,
+    mode: room.settings.mode,
+    createdAt: room.createdAt,
+    players: room.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      isConnected: player.isConnected,
+      rating: player.rating
+    }))
+  };
+}
+
 function emitRoom(room: InternalRoom, now = Date.now()) {
   io.to(room.roomCode).emit("room:state", toPublicState(room, now));
 }
@@ -1822,6 +1883,18 @@ async function getRequestUser(req: Request) {
 function getAdminToken(req: Request): string | undefined {
   const header = req.headers["x-admin-token"];
   return Array.isArray(header) ? header[0] : header;
+}
+
+function sendApiError(res: Response, err: unknown, fallback: string) {
+  const rawMessage = err instanceof Error ? err.message : String(err);
+  try {
+    const parsed = JSON.parse(rawMessage) as { message?: string; code?: string };
+    const status = parsed.code === "23505" ? 409 : 500;
+    res.status(status).json({ message: parsed.message ?? fallback, code: parsed.code });
+    return;
+  } catch {
+    res.status(500).json({ message: rawMessage || fallback });
+  }
 }
 
 function normalizeOrigin(origin: string | undefined): string {

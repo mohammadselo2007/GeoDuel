@@ -1,10 +1,13 @@
 import type {
   AdminPermission,
   AdminRole,
+  AdminAnalyticsSummary,
+  AdminRoomSummary,
   AdminUserSummary,
   AuditLogEntry,
   CountryPool,
   FriendsPayload,
+  FriendRequestActionResponse,
   GameMode,
   PublicProfile
 } from "../../../shared/types";
@@ -73,6 +76,14 @@ export async function fetchAdminStats(token?: string, adminToken?: string): Prom
   });
 }
 
+export async function fetchAdminAnalyticsApi(token?: string, adminToken?: string): Promise<AdminAnalyticsSummary> {
+  return apiRequest<AdminAnalyticsSummary>("/api/admin/analytics", { token, adminToken });
+}
+
+export async function fetchAdminRoomsApi(token?: string, adminToken?: string): Promise<AdminRoomSummary[]> {
+  return apiRequest<AdminRoomSummary[]>("/api/admin/rooms", { token, adminToken });
+}
+
 export async function searchUsers(query: string): Promise<PublicProfile[]> {
   return apiRequest<PublicProfile[]>(`/api/users/search?q=${encodeURIComponent(query)}`).catch(() => []);
 }
@@ -85,8 +96,8 @@ export async function fetchFriends(token: string): Promise<FriendsPayload | null
   return apiRequest<FriendsPayload>("/api/friends", { token }).catch(() => null);
 }
 
-export async function sendFriendRequestApi(token: string, targetUserId: string) {
-  await apiRequest("/api/friends/request", {
+export async function sendFriendRequestApi(token: string, targetUserId: string): Promise<FriendRequestActionResponse> {
+  return apiRequest<FriendRequestActionResponse>("/api/friends/request", {
     token,
     method: "POST",
     body: { targetUserId }
@@ -126,6 +137,38 @@ export async function banUserApi(token: string | undefined, adminToken: string |
 
 export async function unbanUserApi(token: string | undefined, adminToken: string | undefined, userId: string) {
   await apiRequest("/api/admin/unban", {
+    token,
+    adminToken,
+    method: "POST",
+    body: { userId }
+  });
+}
+
+export async function updateUserRatingApi(
+  token: string | undefined,
+  adminToken: string | undefined,
+  userId: string,
+  rating: number,
+  reason: string
+): Promise<PlayerProfile> {
+  return apiRequest<PlayerProfile>(`/api/admin/users/${encodeURIComponent(userId)}/rating`, {
+    token,
+    adminToken,
+    method: "POST",
+    body: { rating, reason }
+  });
+}
+
+export async function forceEndRoomApi(token: string | undefined, adminToken: string | undefined, roomCode: string) {
+  await apiRequest(`/api/admin/rooms/${encodeURIComponent(roomCode)}/end`, {
+    token,
+    adminToken,
+    method: "POST"
+  });
+}
+
+export async function kickPlayerApi(token: string | undefined, adminToken: string | undefined, roomCode: string, userId: string) {
+  await apiRequest(`/api/admin/rooms/${encodeURIComponent(roomCode)}/kick`, {
     token,
     adminToken,
     method: "POST",
@@ -181,7 +224,14 @@ async function apiRequest<T = unknown>(
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    let parsedMessage = "";
+    try {
+      const parsed = JSON.parse(message) as { message?: string };
+      parsedMessage = parsed.message ?? "";
+    } catch {
+      parsedMessage = "";
+    }
+    throw new Error(parsedMessage || message || `Request failed: ${response.status}`);
   }
 
   if (response.status === 204) return undefined as T;

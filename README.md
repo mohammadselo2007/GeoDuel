@@ -223,6 +223,7 @@ Friends system:
 - Search public profiles by display name.
 - View another player profile.
 - Send friend requests.
+- Duplicate friend requests are handled safely and show “Friend request already sent” instead of crashing the server.
 - Accept or decline requests.
 - Remove friends.
 - See basic presence: online, offline, in game, or queue.
@@ -259,6 +260,7 @@ Permissions:
 
 - `view_analytics`
 - `view_users`
+- `edit_elo`
 - `ban_users`
 - `unban_users`
 - `kick_players`
@@ -278,15 +280,20 @@ The owner can grant/revoke roles and choose permissions for admins/moderators/su
 
 Admin dashboard features:
 
-- View analytics snapshot.
+- Unlocks only after the backend confirms an owner/admin account or the private `ADMIN_TOKEN`.
+- View analytics snapshots and recent event counts.
+- View active rooms.
 - Search users.
 - View profile/stats.
+- Edit player Elo with an audit-log reason.
 - Ban/unban users.
 - Assign/remove roles.
 - Choose permissions.
 - View audit logs.
 - Kick players from active games.
 - Force-end games.
+
+The public footer does not link to `/admin`; keep the admin URL private and bookmark it as the owner.
 
 Banned users cannot:
 
@@ -371,6 +378,7 @@ VITE_SUPABASE_ANON_KEY=
 - **Ranked never matches:** Open two signed-in accounts in different browsers and queue both.
 - **Admin says forbidden:** Set `OWNER_EMAIL`, `ADMIN_EMAILS`, or use `ADMIN_TOKEN`.
 - **Friends do not save:** Confirm `docs/supabase-schema.sql` was run and backend has `SUPABASE_SERVICE_ROLE_KEY`.
+- **Friend request already sent:** This is expected when a pending request exists; refresh the Friends tab to see outgoing requests.
 - **Frontend cannot reach backend:** Set Vercel `VITE_SERVER_URL` to Render URL and Render `CLIENT_ORIGIN` to Vercel URL.
 - **CORS errors:** `CLIENT_ORIGIN` must include the exact deployed frontend origin. GeoDuel normalizes trailing slashes and shares the same allowlist between Express and Socket.IO.
 - **Supabase DNS error:** `VITE_SUPABASE_URL` is wrong. Copy the exact project URL from Supabase, then redeploy Vercel.

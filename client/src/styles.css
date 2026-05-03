@@ -554,6 +554,12 @@ select {
   font-weight: 800;
 }
 
+.success-message {
+  margin: 0;
+  color: var(--green);
+  font-weight: 900;
+}
+
 .game {
   display: grid;
   gap: 16px;
@@ -2054,6 +2060,67 @@ select:focus {
   text-transform: capitalize;
 }
 
+.admin-locked-card {
+  display: grid;
+  gap: 10px;
+  border-color: rgba(255, 217, 138, 0.24);
+  background:
+    radial-gradient(circle at 88% 18%, rgba(255, 217, 138, 0.12), transparent 32%),
+    var(--surface-1);
+}
+
+.admin-locked-card p {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.admin-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-tabs button {
+  min-height: 48px;
+  border: 1px solid rgba(182, 205, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--muted);
+  font-weight: 1000;
+}
+
+.admin-tabs button.selected {
+  border-color: rgba(102, 231, 255, 0.42);
+  background: rgba(102, 231, 255, 0.12);
+  color: #ffffff;
+  box-shadow: inset 0 0 20px rgba(102, 231, 255, 0.08);
+}
+
+.admin-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-overview-grid h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.elo-edit-input {
+  width: 84px;
+  min-height: 40px;
+  padding: 0 10px;
+  text-align: center;
+}
+
+.admin-room-row {
+  align-items: start;
+}
+
 .practice-brief p {
   max-width: 58ch;
   color: var(--muted);
@@ -2978,7 +3045,9 @@ body::before {
   }
 
   .permission-grid,
-  .compact-achievements {
+  .compact-achievements,
+  .admin-tabs,
+  .admin-overview-grid {
     grid-template-columns: 1fr;
   }
 }

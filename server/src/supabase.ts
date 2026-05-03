@@ -1,8 +1,10 @@
 import type {
   AdminPermission,
   AdminRole,
+  AdminAnalyticsSummary,
   AuditLogEntry,
   CountryPool,
+  FriendRequestActionResponse,
   FriendRequestSummary,
   FriendsPayload,
   FriendSummary,
@@ -86,6 +88,7 @@ const anonKey = process.env.SUPABASE_ANON_KEY;
 const ALL_ADMIN_PERMISSIONS: AdminPermission[] = [
   "view_analytics",
   "view_users",
+  "edit_elo",
   "ban_users",
   "unban_users",
   "kick_players",
@@ -98,7 +101,17 @@ const ALL_ADMIN_PERMISSIONS: AdminPermission[] = [
 
 const DEFAULT_ROLE_PERMISSIONS: Record<AdminRole, AdminPermission[]> = {
   owner: ALL_ADMIN_PERMISSIONS,
-  admin: ["view_analytics", "view_users", "ban_users", "unban_users", "kick_players", "force_end_games", "view_active_rooms", "manage_reports"],
+  admin: [
+    "view_analytics",
+    "view_users",
+    "edit_elo",
+    "ban_users",
+    "unban_users",
+    "kick_players",
+    "force_end_games",
+    "view_active_rooms",
+    "manage_reports"
+  ],
   moderator: ["view_users", "ban_users", "kick_players", "view_active_rooms", "manage_reports"],
   support: ["view_users", "view_active_rooms", "manage_reports"]
 };
@@ -246,20 +259,60 @@ export async function getFriendsPayload(userId: string, presenceForUser: (target
   };
 }
 
-export async function sendFriendRequest(fromUserId: string, toUserId: string): Promise<void> {
-  if (!isSupabaseConfigured() || fromUserId === toUserId) return;
-  await supabaseRequest("/rest/v1/friend_requests", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates" },
-    body: JSON.stringify([
-      {
-        from_user_id: fromUserId,
-        to_user_id: toUserId,
-        status: "pending",
-        updated_at: new Date().toISOString()
-      }
-    ])
-  });
+export async function sendFriendRequest(fromUserId: string, toUserId: string): Promise<FriendRequestActionResponse> {
+  if (!isSupabaseConfigured() || fromUserId === toUserId) {
+    return { status: "alreadyPending", message: "Choose another player." };
+  }
+
+  const [existingFriendship, outgoingRequest, incomingRequest] = await Promise.all([
+    supabaseRequest<FriendshipRow[]>(
+      `/rest/v1/friendships?select=*&user_id=eq.${encodeURIComponent(fromUserId)}&friend_user_id=eq.${encodeURIComponent(toUserId)}&limit=1`
+    ).catch(() => []),
+    supabaseRequest<FriendRequestRow[]>(
+      `/rest/v1/friend_requests?select=*&from_user_id=eq.${encodeURIComponent(fromUserId)}&to_user_id=eq.${encodeURIComponent(
+        toUserId
+      )}&status=eq.pending&limit=1`
+    ).catch(() => []),
+    supabaseRequest<FriendRequestRow[]>(
+      `/rest/v1/friend_requests?select=*&from_user_id=eq.${encodeURIComponent(toUserId)}&to_user_id=eq.${encodeURIComponent(
+        fromUserId
+      )}&status=eq.pending&limit=1`
+    ).catch(() => [])
+  ]);
+
+  if (existingFriendship.length > 0) {
+    return { status: "alreadyFriends", message: "You are already friends." };
+  }
+
+  if (outgoingRequest.length > 0) {
+    return { status: "alreadyPending", message: "Friend request already sent." };
+  }
+
+  if (incomingRequest.length > 0) {
+    return { status: "incomingPending", message: "They already sent you a request. Check incoming requests." };
+  }
+
+  try {
+    await supabaseRequest("/rest/v1/friend_requests?on_conflict=from_user_id,to_user_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify([
+        {
+          from_user_id: fromUserId,
+          to_user_id: toUserId,
+          status: "pending",
+          updated_at: new Date().toISOString()
+        }
+      ])
+    });
+  } catch (err) {
+    if (isDuplicateKeyError(err)) {
+      return { status: "alreadyPending", message: "Friend request already sent." };
+    }
+    throw err;
+  }
+
+  return { status: "sent", message: "Friend request sent." };
 }
 
 export async function respondToFriendRequest(requestId: string, userId: string, accepted: boolean): Promise<void> {
@@ -386,6 +439,47 @@ export async function getAdminStats(activeRooms: number): Promise<AdminStats> {
   };
 }
 
+export async function getAnalyticsSummary(limit = 60): Promise<AdminAnalyticsSummary> {
+  if (!isSupabaseConfigured()) {
+    return {
+      recentEvents: [],
+      eventsByName: [],
+      visitsByPath: [],
+      gameStarts: 0,
+      completedMatches: 0
+    };
+  }
+
+  const [eventRows, matchRows] = await Promise.all([
+    supabaseRequest<AnalyticsEventRow[]>(`/rest/v1/analytics_events?select=*&order=created_at.desc&limit=${limit}`),
+    supabaseRequest<SupabaseMatchRow[]>("/rest/v1/matches?select=*&order=completed_at.desc&limit=1000").catch(() => [])
+  ]);
+
+  const eventsByName = new Map<string, number>();
+  const visitsByPath = new Map<string, number>();
+
+  for (const row of eventRows) {
+    eventsByName.set(row.event, (eventsByName.get(row.event) ?? 0) + 1);
+    if (row.event === "page_visit") {
+      visitsByPath.set(row.path, (visitsByPath.get(row.path) ?? 0) + 1);
+    }
+  }
+
+  return {
+    recentEvents: eventRows.map((row) => ({
+      id: String(row.id),
+      event: row.event,
+      path: row.path,
+      detail: row.detail ?? {},
+      createdAt: row.created_at ? Date.parse(row.created_at) : Date.now()
+    })),
+    eventsByName: [...eventsByName.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count),
+    visitsByPath: [...visitsByPath.entries()].map(([path, count]) => ({ path, count })).sort((a, b) => b.count - a.count),
+    gameStarts: eventRows.filter((row) => row.event === "game_start").length,
+    completedMatches: matchRows.length
+  };
+}
+
 export async function getActiveBan(userId: string | undefined): Promise<StoredBan | undefined> {
   if (!isSupabaseConfigured() || !userId) return undefined;
   const rows = await supabaseRequest<BanRow[]>(
@@ -478,7 +572,11 @@ export async function searchAdminUsers(
   query: string,
   presenceForUser: (userId: string) => PresenceStatus
 ): Promise<Array<{ profile: PublicProfile; roles: AdminRole[]; permissions: AdminPermission[]; banned: boolean; banReason?: string }>> {
-  const profiles = await searchPublicProfiles(query || "Geo", presenceForUser);
+  const clean = query.trim();
+  const profiles =
+    clean.length >= 2
+      ? await searchPublicProfiles(clean, presenceForUser)
+      : (await getLeaderboard(25)).map((profile) => publicProfileFromStored(profile, presenceForUser(profile.id)));
   const rows = await Promise.all(
     profiles.map(async (profile) => {
       const [roles, permissions, ban] = await Promise.all([getUserRoles(profile.id), getUserPermissions(profile.id), getActiveBan(profile.id)]);
@@ -494,6 +592,33 @@ export async function searchAdminUsers(
   return rows;
 }
 
+export async function updateUserRating(
+  actorUserId: string | undefined,
+  targetUserId: string,
+  rating: number,
+  reason: string
+): Promise<StoredProfile | undefined> {
+  if (!isSupabaseConfigured()) return undefined;
+  const profile = await getProfile(targetUserId);
+  if (!profile) return undefined;
+
+  const nextRating = Math.min(3000, Math.max(100, Math.round(rating)));
+  const updatedProfile: StoredProfile = {
+    ...profile,
+    rating: nextRating,
+    lastRatingDelta: nextRating - profile.rating,
+    updatedAt: Date.now()
+  };
+
+  await upsertProfile(updatedProfile);
+  await writeAuditLog(actorUserId, "elo_updated", targetUserId, {
+    previousRating: profile.rating,
+    nextRating,
+    reason: reason.slice(0, 240) || "Admin rating adjustment"
+  });
+  return updatedProfile;
+}
+
 export async function setUserRoleAndPermissions(
   actorUserId: string | undefined,
   targetUserId: string,
@@ -501,13 +626,13 @@ export async function setUserRoleAndPermissions(
   permissions: AdminPermission[]
 ): Promise<void> {
   if (!isSupabaseConfigured()) return;
-  await supabaseRequest("/rest/v1/user_roles", {
+  await supabaseRequest("/rest/v1/user_roles?on_conflict=user_id,role", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates" },
     body: JSON.stringify([{ user_id: targetUserId, role, granted_by: actorUserId ?? null }])
   });
   if (permissions.length > 0) {
-    await supabaseRequest("/rest/v1/role_permissions", {
+    await supabaseRequest("/rest/v1/role_permissions?on_conflict=user_id,permission", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify(permissions.map((permission) => ({ user_id: targetUserId, permission, granted_by: actorUserId ?? null })))
@@ -526,7 +651,7 @@ export async function removeUserRole(actorUserId: string | undefined, targetUser
 
 export async function banUser(actorUserId: string | undefined, targetUserId: string, reason: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
-  await supabaseRequest("/rest/v1/bans", {
+  await supabaseRequest("/rest/v1/bans?on_conflict=user_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates" },
     body: JSON.stringify([
@@ -586,6 +711,11 @@ async function getUserPermissions(userId: string): Promise<AdminPermission[]> {
     `/rest/v1/role_permissions?select=permission&user_id=eq.${encodeURIComponent(userId)}`
   ).catch(() => []);
   return rows.map((row) => row.permission).filter(isAdminPermission);
+}
+
+function isDuplicateKeyError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('"code":"23505"') || message.includes("duplicate key value");
 }
 
 export function isAdminPermission(permission: unknown): permission is AdminPermission {
@@ -821,6 +951,14 @@ interface AuditLogRow {
   actor_user_id: string | null;
   action: string;
   target_user_id: string | null;
+  detail: Record<string, unknown> | null;
+  created_at?: string;
+}
+
+interface AnalyticsEventRow {
+  id: number;
+  event: string;
+  path: string;
   detail: Record<string, unknown> | null;
   created_at?: string;
 }

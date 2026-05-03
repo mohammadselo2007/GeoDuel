@@ -30,7 +30,9 @@ import {
 } from "lucide-react";
 import type {
   ActionAck,
+  AdminAnalyticsSummary,
   AdminPermission,
+  AdminRoomSummary,
   AdminRole,
   AdminUserSummary,
   AuditLogEntry,
@@ -67,6 +69,8 @@ import {
 } from "./lib/auth";
 import {
   fetchAdminStats,
+  fetchAdminAnalyticsApi,
+  fetchAdminRoomsApi,
   banUserApi,
   fetchAuditLogsApi,
   fetchFriends,
@@ -81,8 +85,11 @@ import {
   sendFriendRequestApi,
   setAdminRoleApi,
   respondFriendRequestApi,
+  forceEndRoomApi,
+  kickPlayerApi,
   trackEvent,
   unbanUserApi,
+  updateUserRatingApi,
   type AdminStats
 } from "./lib/backend";
 import { getClientEnvStatus } from "./lib/env";
@@ -116,6 +123,7 @@ const ADMIN_ROLE_OPTIONS: AdminRole[] = ["owner", "admin", "moderator", "support
 const ADMIN_PERMISSION_OPTIONS: AdminPermission[] = [
   "view_analytics",
   "view_users",
+  "edit_elo",
   "ban_users",
   "unban_users",
   "kick_players",
@@ -1509,9 +1517,6 @@ function FooterLinks({ onNavigate }: { onNavigate: (pathName: string) => void })
       <button type="button" onClick={() => onNavigate("/terms")}>
         Terms of Service
       </button>
-      <button type="button" onClick={() => onNavigate("/admin")}>
-        Admin
-      </button>
     </footer>
   );
 }
@@ -1584,27 +1589,42 @@ function AdminDashboard({
 }) {
   const [adminToken, setAdminToken] = useState("");
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [analytics, setAnalytics] = useState<AdminAnalyticsSummary | null>(null);
+  const [activeRooms, setActiveRooms] = useState<AdminRoomSummary[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUserSummary[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [userQuery, setUserQuery] = useState("");
   const [roleDraft, setRoleDraft] = useState<AdminRole>("moderator");
   const [permissionDraft, setPermissionDraft] = useState<AdminPermission[]>(["view_users", "view_active_rooms"]);
+  const [ratingDrafts, setRatingDrafts] = useState<Record<string, string>>({});
+  const [ratingReason, setRatingReason] = useState("Admin Elo adjustment");
+  const [activeAdminTab, setActiveAdminTab] = useState<"overview" | "users" | "rooms" | "audit">("overview");
+  const [unlocked, setUnlocked] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
 
   async function loadDashboard(query = userQuery) {
     setLoading(true);
     setError("");
+    setStatusMessage("");
     try {
-      const [nextStats, nextUsers, nextAudit] = await Promise.all([
+      const [nextStats, nextUsers, nextAudit, nextAnalytics, nextRooms] = await Promise.all([
         fetchAdminStats(session?.accessToken, adminToken || undefined),
-        searchAdminUsersApi(session?.accessToken, adminToken || undefined, query || "Geo"),
-        fetchAuditLogsApi(session?.accessToken, adminToken || undefined)
+        searchAdminUsersApi(session?.accessToken, adminToken || undefined, query),
+        fetchAuditLogsApi(session?.accessToken, adminToken || undefined),
+        fetchAdminAnalyticsApi(session?.accessToken, adminToken || undefined),
+        fetchAdminRoomsApi(session?.accessToken, adminToken || undefined)
       ]);
       setStats(nextStats);
       setAdminUsers(nextUsers);
       setAuditLogs(nextAudit);
+      setAnalytics(nextAnalytics);
+      setActiveRooms(nextRooms);
+      setUnlocked(true);
+      setStatusMessage("Admin dashboard unlocked.");
     } catch (err) {
+      setUnlocked(false);
       setError(err instanceof Error ? err.message : "Admin dashboard failed to load.");
     } finally {
       setLoading(false);
@@ -1614,9 +1634,11 @@ function AdminDashboard({
   async function runAdminAction(action: () => Promise<void>) {
     setLoading(true);
     setError("");
+    setStatusMessage("");
     try {
       await action();
       await loadDashboard();
+      setStatusMessage("Admin action completed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Admin action failed.");
     } finally {
@@ -1630,13 +1652,16 @@ function AdminDashboard({
     );
   }
 
-  useEffect(() => {
-    if (session) {
-      loadDashboard();
-    }
-    // Admin token is intentionally manual so it is not sent until the operator asks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.accessToken]);
+  function updateRatingDraft(userId: string, value: string) {
+    setRatingDrafts((current) => ({ ...current, [userId]: value.replace(/[^\d]/g, "").slice(0, 4) }));
+  }
+
+  async function applyRating(user: AdminUserSummary) {
+    const rating = Number(ratingDrafts[user.profile.id] || user.profile.rating);
+    await updateUserRatingApi(session?.accessToken, adminToken || undefined, user.profile.id, rating, ratingReason);
+  }
+
+  const credentialsReady = Boolean(session?.accessToken || adminToken.trim());
 
   return (
     <main className="app admin-screen plus-screen">
@@ -1647,7 +1672,7 @@ function AdminDashboard({
             <span>GeoDuel Admin</span>
           </div>
           <h1>Operations dashboard</h1>
-          <p>Monitor rooms, account activity, game volume, ranked usage, region trends, and server health.</p>
+          <p>Unlock with an owner/admin account or the private admin password, then manage users, rooms, analytics, and Elo safely.</p>
         </div>
         <div className="hero-actions">
           <button className="icon-text-button" type="button" onClick={onBack}>
@@ -1661,16 +1686,49 @@ function AdminDashboard({
         <AuthPanel session={session} profile={profile} onAuthSuccess={onAuthSuccess} onSignOut={onSignOut} />
         <section className="glass-panel admin-token-card">
           <p className="eyebrow">Protected access</p>
-          <h2>Admin key</h2>
-          <p>Use an approved admin account or enter the optional backend `ADMIN_TOKEN` for operations access.</p>
-          <input value={adminToken} onChange={(event) => setAdminToken(event.target.value)} type="password" placeholder="ADMIN_TOKEN" />
-          <button className="primary-action compact" type="button" onClick={() => loadDashboard()} disabled={loading || (!session && !adminToken)}>
-            {loading ? "Loading..." : "Load dashboard"}
+          <h2>Unlock operations</h2>
+          <p>Use your owner/admin login, or enter the private admin password configured on Render. Management tools stay hidden until unlock succeeds.</p>
+          <input value={adminToken} onChange={(event) => setAdminToken(event.target.value)} type="password" placeholder="Admin password" />
+          <button className="primary-action compact" type="button" onClick={() => loadDashboard()} disabled={loading || !credentialsReady}>
+            {loading ? "Checking access..." : unlocked ? "Refresh dashboard" : "Unlock dashboard"}
           </button>
           {error && <p className="form-message">{error}</p>}
+          {statusMessage && <p className="success-message">{statusMessage}</p>}
         </section>
       </section>
 
+      {!unlocked && (
+        <section className="glass-panel admin-locked-card">
+          <p className="eyebrow">Locked</p>
+          <h2>Admin tools are hidden</h2>
+          <p>
+            The user list, Elo editor, roles, bans, force-end controls, analytics, and audit logs only render after the
+            backend confirms admin access.
+          </p>
+        </section>
+      )}
+
+      {unlocked && (
+        <nav className="admin-tabs" aria-label="Admin dashboard sections">
+          {[
+            ["overview", "Overview"],
+            ["users", "Users & Elo"],
+            ["rooms", "Active Rooms"],
+            ["audit", "Audit Log"]
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              className={activeAdminTab === value ? "selected" : ""}
+              type="button"
+              onClick={() => setActiveAdminTab(value as typeof activeAdminTab)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {unlocked && activeAdminTab === "overview" && (
       <section className="glass-panel admin-stats-card">
         <div className="panel-title">
           <div>
@@ -1681,33 +1739,49 @@ function AdminDashboard({
             {stats?.serverHealth ?? "locked"}
           </span>
         </div>
-        {stats ? (
-          <>
-            <div className="stat-grid wide admin-stat-grid">
-              <Metric label="Total users" value={stats.totalUsers} />
-              <Metric label="Active users" value={stats.activeUsers} />
-              <Metric label="Games played" value={stats.totalGamesPlayed} />
-              <Metric label="Active rooms" value={stats.activeRooms} />
-              <Metric label="Ranked games" value={stats.rankedGames} />
-              <Metric label="Practice games" value={stats.practiceGames} />
-              <Metric label="Avg duration" value={formatShortTime(stats.averageGameDurationMs)} />
-              <Metric label="Health" value={stats.serverHealth} />
+        <div className="stat-grid wide admin-stat-grid">
+          <Metric label="Total users" value={stats?.totalUsers ?? 0} />
+          <Metric label="Active users" value={stats?.activeUsers ?? 0} />
+          <Metric label="Games played" value={stats?.totalGamesPlayed ?? 0} />
+          <Metric label="Active rooms" value={stats?.activeRooms ?? 0} />
+          <Metric label="Ranked games" value={stats?.rankedGames ?? 0} />
+          <Metric label="Practice games" value={stats?.practiceGames ?? 0} />
+          <Metric label="Avg duration" value={formatShortTime(stats?.averageGameDurationMs ?? 0)} />
+          <Metric label="Health" value={stats?.serverHealth ?? "locked"} />
+        </div>
+        <div className="admin-overview-grid">
+          <div className="region-meter-list">
+            <h3>Region usage</h3>
+            {(stats?.mostUsedRegions ?? []).length === 0 && <p className="empty-history">No region data yet.</p>}
+            {(stats?.mostUsedRegions ?? []).map((region) => (
+              <div className="region-meter" key={region.region}>
+                <span>{COUNTRY_POOL_LABELS[region.region as GameSettings["countryPool"]] ?? region.region}</span>
+                <strong>{region.count}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="region-meter-list">
+            <h3>Analytics events</h3>
+            <div className="region-meter">
+              <span>Game starts</span>
+              <strong>{analytics?.gameStarts ?? 0}</strong>
             </div>
-            <div className="region-meter-list">
-              {stats.mostUsedRegions.length === 0 && <p className="empty-history">No region data yet.</p>}
-              {stats.mostUsedRegions.map((region) => (
-                <div className="region-meter" key={region.region}>
-                  <span>{COUNTRY_POOL_LABELS[region.region as GameSettings["countryPool"]] ?? region.region}</span>
-                  <strong>{region.count}</strong>
-                </div>
-              ))}
+            <div className="region-meter">
+              <span>Completed matches</span>
+              <strong>{analytics?.completedMatches ?? 0}</strong>
             </div>
-          </>
-        ) : (
-          <p className="form-message">Sign in as an admin or enter an admin token to load live stats.</p>
-        )}
+            {(analytics?.eventsByName ?? []).slice(0, 6).map((event) => (
+              <div className="region-meter" key={event.event}>
+                <span>{event.event.replace(/_/g, " ")}</span>
+                <strong>{event.count}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
+      )}
 
+      {unlocked && activeAdminTab === "users" && (
       <section className="glass-panel admin-stats-card">
         <div className="panel-title">
           <div>
@@ -1746,6 +1820,10 @@ function AdminDashboard({
             ))}
           </div>
         </div>
+        <label className="field">
+          <span>Elo edit reason</span>
+          <input value={ratingReason} onChange={(event) => setRatingReason(event.target.value)} placeholder="Reason shown in audit log" />
+        </label>
         <div className="admin-user-list">
           {adminUsers.map((user) => (
             <article className="admin-user-row" key={user.profile.id}>
@@ -1757,6 +1835,21 @@ function AdminDashboard({
                 </span>
               </div>
               <div className="mini-actions">
+                <input
+                  className="elo-edit-input"
+                  value={ratingDrafts[user.profile.id] ?? String(user.profile.rating)}
+                  onChange={(event) => updateRatingDraft(user.profile.id, event.target.value)}
+                  inputMode="numeric"
+                  aria-label={`Edit Elo for ${user.profile.name}`}
+                />
+                <button
+                  className="primary-action compact"
+                  type="button"
+                  onClick={() => runAdminAction(() => applyRating(user))}
+                  disabled={loading}
+                >
+                  Save Elo
+                </button>
                 <button
                   className="secondary-action compact"
                   type="button"
@@ -1809,7 +1902,56 @@ function AdminDashboard({
           {adminUsers.length === 0 && <p className="empty-history">Load the dashboard or search for users.</p>}
         </div>
       </section>
+      )}
 
+      {unlocked && activeAdminTab === "rooms" && (
+        <section className="glass-panel admin-stats-card">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">Active rooms</p>
+              <h2>Live match controls</h2>
+            </div>
+            <span className="status-badge">{activeRooms.length} rooms</span>
+          </div>
+          <div className="admin-user-list">
+            {activeRooms.map((room) => (
+              <article className="admin-user-row admin-room-row" key={room.roomCode}>
+                <div>
+                  <strong>{room.roomCode}</strong>
+                  <span>
+                    {room.matchType} · {room.status}/{room.phase} · Round {room.roundNumber} · {COUNTRY_POOL_LABELS[room.countryPool]}
+                  </span>
+                  <span>{room.players.map((player) => `${player.name}${player.isConnected ? "" : " disconnected"}`).join(" vs ") || "No players"}</span>
+                </div>
+                <div className="mini-actions">
+                  {room.players.map((player) => (
+                    <button
+                      className="ghost-action compact"
+                      type="button"
+                      key={player.id}
+                      onClick={() => runAdminAction(() => kickPlayerApi(session?.accessToken, adminToken || undefined, room.roomCode, player.id))}
+                      disabled={loading}
+                    >
+                      Kick {player.name}
+                    </button>
+                  ))}
+                  <button
+                    className="danger-action compact"
+                    type="button"
+                    onClick={() => runAdminAction(() => forceEndRoomApi(session?.accessToken, adminToken || undefined, room.roomCode))}
+                    disabled={loading}
+                  >
+                    Force end game
+                  </button>
+                </div>
+              </article>
+            ))}
+            {activeRooms.length === 0 && <p className="empty-history">No active rooms right now.</p>}
+          </div>
+        </section>
+      )}
+
+      {unlocked && activeAdminTab === "audit" && (
       <section className="glass-panel admin-stats-card">
         <div className="panel-title">
           <div>
@@ -1833,6 +1975,7 @@ function AdminDashboard({
           {auditLogs.length === 0 && <p className="empty-history">No audit events loaded.</p>}
         </div>
       </section>
+      )}
     </main>
   );
 }
@@ -2081,10 +2224,13 @@ function FriendsAndSearchScreen({
   const [friends, setFriends] = useState<FriendsPayload | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<PublicProfile | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingFriendIds, setPendingFriendIds] = useState<string[]>([]);
 
   async function refreshFriends() {
     if (!authToken) return;
-    setFriends(await fetchFriends(authToken));
+    const nextFriends = await fetchFriends(authToken);
+    setFriends(nextFriends);
+    setPendingFriendIds(nextFriends?.outgoing.map((request) => request.toUserId) ?? []);
   }
 
   useEffect(() => {
@@ -2108,12 +2254,18 @@ function FriendsAndSearchScreen({
       onMessage("Sign in to add friends.");
       return;
     }
+    if (pendingFriendIds.includes(userId)) {
+      onMessage("Friend request already sent.");
+      return;
+    }
+    setPendingFriendIds((current) => [...new Set([...current, userId])]);
     setBusy(true);
     try {
-      await sendFriendRequestApi(authToken, userId);
-      onMessage("Friend request sent.");
+      const result = await sendFriendRequestApi(authToken, userId);
+      onMessage(result.message);
       await refreshFriends();
     } catch (err) {
+      setPendingFriendIds((current) => current.filter((candidate) => candidate !== userId));
       onMessage(err instanceof Error ? err.message : "Friend request failed.");
     } finally {
       setBusy(false);
@@ -2140,6 +2292,13 @@ function FriendsAndSearchScreen({
     } finally {
       setBusy(false);
     }
+  }
+
+  function getFriendRelation(userId: string): "friend" | "outgoing" | "incoming" | "none" {
+    if ((friends?.friends ?? []).some((friend) => friend.userId === userId)) return "friend";
+    if ((friends?.outgoing ?? []).some((request) => request.toUserId === userId) || pendingFriendIds.includes(userId)) return "outgoing";
+    if ((friends?.incoming ?? []).some((request) => request.fromUserId === userId)) return "incoming";
+    return "none";
   }
 
   if (!authToken) {
@@ -2177,6 +2336,7 @@ function FriendsAndSearchScreen({
               onView={() => setSelectedProfile(profile)}
               onAddFriend={() => addFriend(profile.id)}
               onInvite={() => onInviteFriend(profile.id)}
+              relation={getFriendRelation(profile.id)}
               busy={busy}
             />
           ))}
@@ -2234,14 +2394,19 @@ function PublicProfileCard({
   onView,
   onAddFriend,
   onInvite,
+  relation,
   busy
 }: {
   profile: PublicProfile;
   onView: () => void;
   onAddFriend: () => void;
   onInvite: () => void;
+  relation: "friend" | "outgoing" | "incoming" | "none";
   busy: boolean;
 }) {
+  const friendButtonLabel =
+    relation === "friend" ? "Friends" : relation === "outgoing" ? "Request sent" : relation === "incoming" ? "Respond in requests" : "Add friend";
+
   return (
     <article className="mini-profile-card">
       <div>
@@ -2254,9 +2419,9 @@ function PublicProfileCard({
         <button className="ghost-action compact" type="button" onClick={onView}>
           View profile
         </button>
-        <button className="secondary-action compact" type="button" onClick={onAddFriend} disabled={busy}>
+        <button className="secondary-action compact" type="button" onClick={onAddFriend} disabled={busy || relation !== "none"}>
           <UserPlus aria-hidden="true" size={16} />
-          Add friend
+          {friendButtonLabel}
         </button>
         <button className="primary-action compact" type="button" onClick={onInvite} disabled={profile.presence === "offline"}>
           Challenge

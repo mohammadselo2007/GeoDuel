@@ -26,6 +26,7 @@ export type AdminRole = "owner" | "admin" | "moderator" | "support";
 export type AdminPermission =
   | "view_analytics"
   | "view_users"
+  | "edit_elo"
   | "ban_users"
   | "unban_users"
   | "kick_players"
@@ -285,6 +286,46 @@ export interface AdminUserSummary {
   permissions: AdminPermission[];
   banned: boolean;
   banReason?: string;
+}
+
+export interface AdminRoomSummary {
+  roomCode: string;
+  matchType: MatchType;
+  status: GameStatus;
+  phase: GamePhase;
+  playerCount: number;
+  activePlayerId?: string;
+  roundNumber: number;
+  countryPool: CountryPool;
+  mode: GameMode;
+  createdAt: number;
+  players: Array<{
+    id: string;
+    name: string;
+    isConnected: boolean;
+    rating: number;
+  }>;
+}
+
+export interface AdminAnalyticsEvent {
+  id: string;
+  event: string;
+  path: string;
+  detail: Record<string, unknown>;
+  createdAt: number;
+}
+
+export interface AdminAnalyticsSummary {
+  recentEvents: AdminAnalyticsEvent[];
+  eventsByName: Array<{ event: string; count: number }>;
+  visitsByPath: Array<{ path: string; count: number }>;
+  gameStarts: number;
+  completedMatches: number;
+}
+
+export interface FriendRequestActionResponse {
+  status: "sent" | "alreadyPending" | "alreadyFriends" | "incomingPending";
+  message: string;
 }
 
 export interface AuditLogEntry {

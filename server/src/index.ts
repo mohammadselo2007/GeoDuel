@@ -161,16 +161,28 @@ const server = http.createServer(app);
 
 const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map(normalizeOrigin)
   .filter(Boolean);
-const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : true;
+const corsOrigin: cors.CorsOptions["origin"] =
+  allowedOrigins.length > 0
+    ? (origin, callback) => {
+        const normalizedOrigin = normalizeOrigin(origin);
+        if (!normalizedOrigin || allowedOrigins.includes(normalizedOrigin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`CORS blocked origin ${origin}. Set CLIENT_ORIGIN=${normalizedOrigin} on the backend.`));
+      }
+    : true;
 
 app.use(
   cors({
     origin: corsOrigin,
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   })
 );
+app.options("*", cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
@@ -453,6 +465,7 @@ if (fs.existsSync(clientDist)) {
 const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
   cors: {
     origin: corsOrigin,
+    methods: ["GET", "POST"],
     credentials: true
   }
 });
@@ -1807,6 +1820,16 @@ async function getRequestUser(req: Request) {
 function getAdminToken(req: Request): string | undefined {
   const header = req.headers["x-admin-token"];
   return Array.isArray(header) ? header[0] : header;
+}
+
+function normalizeOrigin(origin: string | undefined): string {
+  const raw = origin?.trim().replace(/\/$/, "") ?? "";
+  if (!raw) return "";
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return raw;
+  }
 }
 
 function sanitizePlayerName(name: string | undefined, fallback: string): string {

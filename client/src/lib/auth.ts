@@ -1,3 +1,5 @@
+import { getClientEnvStatus, isSupabaseEnvReady } from "./env";
+
 const SESSION_KEY = "geoduel:auth-session";
 
 export interface AuthUser {
@@ -25,7 +27,7 @@ interface SupabaseAuthResponse {
 }
 
 export function isAuthConfigured(): boolean {
-  return Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+  return isSupabaseEnvReady();
 }
 
 export function getStoredSession(): AuthSession | null {
@@ -77,14 +79,23 @@ export async function signOut(session: AuthSession | null) {
 
 async function authRequest(path: string, body: unknown): Promise<AuthSession> {
   if (!isAuthConfigured()) {
-    throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+    throw new Error(getClientEnvStatus().errors[0] ?? "Supabase is not configured.");
   }
 
-  const response = await fetch(`${authBaseUrl()}${path}`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(body)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${authBaseUrl()}${path}`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    throw new Error(
+      err instanceof TypeError
+        ? "Could not reach Supabase. Check VITE_SUPABASE_URL in Vercel, then redeploy the frontend."
+        : "Authentication network request failed."
+    );
+  }
   const data = (await response.json()) as SupabaseAuthResponse;
 
   if (!response.ok || !data.access_token || !data.user?.id) {
@@ -106,7 +117,9 @@ async function authRequest(path: string, body: unknown): Promise<AuthSession> {
 }
 
 function authBaseUrl(): string {
-  return `${String(import.meta.env.VITE_SUPABASE_URL).replace(/\/$/, "")}/auth/v1`;
+  const supabaseUrl = getClientEnvStatus().supabaseUrl;
+  if (!supabaseUrl) throw new Error("VITE_SUPABASE_URL is invalid.");
+  return `${supabaseUrl}/auth/v1`;
 }
 
 function authHeaders(token?: string): HeadersInit {

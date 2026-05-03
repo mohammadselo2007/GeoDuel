@@ -8,6 +8,7 @@ import type {
   GameMode,
   PublicProfile
 } from "../../../shared/types";
+import { apiBaseUrl } from "./env";
 import type { LeaderboardEntry, MatchProgressResult, PlayerProfile } from "./profile";
 
 export interface AdminStats {
@@ -159,15 +160,24 @@ async function apiRequest<T = unknown>(
   path: string,
   options: { method?: string; token?: string; adminToken?: string; body?: unknown } = {}
 ): Promise<T> {
-  const response = await fetch(`${apiBaseUrl()}${path}`, {
-    method: options.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-      ...(options.adminToken ? { "x-admin-token": options.adminToken } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}${path}`, {
+      method: options.method ?? "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+        ...(options.adminToken ? { "x-admin-token": options.adminToken } : {})
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+  } catch (err) {
+    throw new Error(
+      err instanceof TypeError
+        ? "Could not reach the GeoDuel backend. Check VITE_SERVER_URL in Vercel, CLIENT_ORIGIN in Render, then redeploy both."
+        : "Backend request failed."
+    );
+  }
 
   if (!response.ok) {
     const message = await response.text();
@@ -176,8 +186,4 @@ async function apiRequest<T = unknown>(
 
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
-}
-
-function apiBaseUrl(): string {
-  return String(import.meta.env.VITE_SERVER_URL || "").replace(/\/$/, "");
 }

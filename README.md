@@ -78,10 +78,10 @@ npm start
 Set these backend environment variables on Render:
 
 ```bash
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_URL=https://lgwmytgsqswjmwpkujhg.supabase.co
 SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
-CLIENT_ORIGIN=https://your-geoduel-frontend.vercel.app
+CLIENT_ORIGIN=https://geo-duel.vercel.app,http://localhost:5173
 OWNER_EMAIL=you@example.com
 ADMIN_EMAILS=admin1@example.com,admin2@example.com
 ADMIN_TOKEN=optional-emergency-admin-token
@@ -93,7 +93,7 @@ What each variable means:
 - `SUPABASE_URL`: your Supabase project URL.
 - `SUPABASE_ANON_KEY`: public anon key used to verify Supabase Auth users.
 - `SUPABASE_SERVICE_ROLE_KEY`: private backend key used for profiles, admin actions, friends, bans, audit logs, and match history.
-- `CLIENT_ORIGIN`: the deployed Vercel frontend URL. This controls CORS.
+- `CLIENT_ORIGIN`: comma-separated allowed browser origins. Include the deployed Vercel frontend URL exactly, for example `https://geo-duel.vercel.app`. Add `http://localhost:5173` for local testing.
 - `OWNER_EMAIL`: the owner account email. Owner gets all permissions and can grant/revoke roles.
 - `ADMIN_EMAILS`: comma-separated admin emails with baseline admin permissions.
 - `ADMIN_TOKEN`: optional emergency admin token for `/admin`.
@@ -119,17 +119,54 @@ Set these frontend environment variables on Vercel:
 
 ```bash
 VITE_SERVER_URL=https://your-render-backend.onrender.com
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_URL=https://lgwmytgsqswjmwpkujhg.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 ```
 
 What each variable means:
 
 - `VITE_SERVER_URL`: your deployed Render backend URL. The browser uses this for Socket.IO and API calls.
-- `VITE_SUPABASE_URL`: your Supabase project URL.
+- `VITE_SUPABASE_URL`: your Supabase project URL. It must be copied exactly and must not include `/rest/v1` or `/auth/v1`.
 - `VITE_SUPABASE_ANON_KEY`: public key used by Supabase Auth in the browser.
 
-Add a Vercel SPA rewrite so `/join/ROOMCODE`, `/admin`, `/privacy`, and `/terms` serve the React app.
+GeoDuel includes `vercel.json` so `/join/ROOMCODE`, `/admin`, `/privacy`, and `/terms` serve the React app.
+
+Important: Vite bakes `VITE_*` values into the frontend bundle. After changing any Vercel env var, redeploy the Vercel project.
+
+## Production Fix Checklist
+
+For the current Supabase project, use this exact URL:
+
+```bash
+https://lgwmytgsqswjmwpkujhg.supabase.co
+```
+
+Common broken value:
+
+```bash
+https://lgwmytgsqswjmwpkuihjg.supabase.co
+```
+
+That typo swaps characters near the end and causes `ERR_NAME_NOT_RESOLVED`.
+
+Set Vercel:
+
+```bash
+VITE_SUPABASE_URL=https://lgwmytgsqswjmwpkujhg.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
+VITE_SERVER_URL=https://geoduel-backend.onrender.com
+```
+
+Set Render:
+
+```bash
+SUPABASE_URL=https://lgwmytgsqswjmwpkujhg.supabase.co
+SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+CLIENT_ORIGIN=https://geo-duel.vercel.app,http://localhost:5173
+```
+
+Then redeploy both Vercel and Render.
 
 ## Ranked Matchmaking
 
@@ -333,4 +370,5 @@ VITE_SUPABASE_ANON_KEY=
 - **Admin says forbidden:** Set `OWNER_EMAIL`, `ADMIN_EMAILS`, or use `ADMIN_TOKEN`.
 - **Friends do not save:** Confirm `docs/supabase-schema.sql` was run and backend has `SUPABASE_SERVICE_ROLE_KEY`.
 - **Frontend cannot reach backend:** Set Vercel `VITE_SERVER_URL` to Render URL and Render `CLIENT_ORIGIN` to Vercel URL.
-- **CORS errors:** `CLIENT_ORIGIN` must exactly match the deployed frontend origin.
+- **CORS errors:** `CLIENT_ORIGIN` must include the exact deployed frontend origin. GeoDuel normalizes trailing slashes and shares the same allowlist between Express and Socket.IO.
+- **Supabase DNS error:** `VITE_SUPABASE_URL` is wrong. Copy the exact project URL from Supabase, then redeploy Vercel.

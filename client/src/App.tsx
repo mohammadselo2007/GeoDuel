@@ -84,6 +84,7 @@ import {
   unbanUserApi,
   type AdminStats
 } from "./lib/backend";
+import { getClientEnvStatus } from "./lib/env";
 import {
   ACHIEVEMENTS,
   applyCompletedMatch,
@@ -1323,6 +1324,7 @@ function AuthPanel({
   const [displayName, setDisplayName] = useState(profile.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const envStatus = getClientEnvStatus();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -1346,8 +1348,9 @@ function AuthPanel({
     return (
       <section className="auth-panel">
         <p className="eyebrow">Accounts</p>
-        <h2>Connect Supabase to go online</h2>
-        <p>Add Supabase environment variables to enable secure email/password accounts.</p>
+        <h2>Supabase needs attention</h2>
+        <p>{envStatus.errors[0] ?? "Add Supabase environment variables to enable secure email/password accounts."}</p>
+        <small>After changing Vercel env vars, redeploy the frontend because Vite bakes them into the build.</small>
       </section>
     );
   }

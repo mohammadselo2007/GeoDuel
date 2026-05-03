@@ -374,6 +374,27 @@ p {
   padding: 14px;
 }
 
+.guest-note {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(102, 231, 255, 0.2);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 96% 12%, rgba(102, 231, 255, 0.14), transparent 28%),
+    rgba(102, 231, 255, 0.055);
+  padding: 12px 14px;
+}
+
+.guest-note strong {
+  color: #ffffff;
+}
+
+.guest-note span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .profile-strip strong,
 .profile-strip span {
   display: block;
@@ -2832,6 +2853,11 @@ body::before {
 
 .auth-panel p {
   line-height: 1.45;
+}
+
+.auth-helper {
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .auth-panel.signed-in {

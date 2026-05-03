@@ -50,6 +50,7 @@ import { TimerPanel } from "./components/TimerPanel";
 import { formatPenalty, formatShortTime, formatTimer } from "./lib/format";
 import {
   forgetRoom,
+  formatGuestId,
   getClientId,
   getRememberedPlayerName,
   getRememberedRoom,
@@ -218,6 +219,7 @@ export default function App() {
   const leaderboard = useMemo<LeaderboardEntry[]>(() => getLeaderboard(), [profile, leaderboardVersion]);
   const effectiveClientId = authSession?.user.id ?? clientId;
   const authToken = authSession?.accessToken;
+  const guestId = useMemo(() => formatGuestId(clientId), [clientId]);
 
   useEffect(() => {
     consumeAuthRedirectSession()
@@ -236,11 +238,11 @@ export default function App() {
   }, [routePath]);
 
   useEffect(() => {
-    const joinMatch = routePath.match(/^\/join\/([A-Za-z0-9]{5})$/);
+      const joinMatch = routePath.match(/^\/join\/([A-Za-z0-9]{5})$/);
     if (joinMatch) {
       setJoinCode(joinMatch[1].toUpperCase());
       setLandingView("setup");
-      setMessage("Invite link loaded. Sign in, then join the room.");
+      setMessage("Invite link loaded. You can join as a guest or sign in first to use your saved profile.");
     }
   }, [routePath]);
 
@@ -819,6 +821,7 @@ export default function App() {
           <AuthPanel
             session={authSession}
             profile={profile}
+            guestId={guestId}
             onAuthSuccess={handleAuthSuccess}
             onSignOut={handleSignOut}
           />
@@ -877,6 +880,12 @@ export default function App() {
             </div>
 
             <ProfileStrip profile={profile} />
+            {!authToken && (
+              <div className="guest-note">
+                <strong>Playing as {guestId}</strong>
+                <span>Unranked rooms and practice work without an account. Sign in only when you want ranked Elo, friends, and saved progression.</span>
+              </div>
+            )}
 
             <div className="mode-grid">
               {(["classic", "noSkip"] as GameMode[]).map((mode) => {
@@ -1044,6 +1053,7 @@ export default function App() {
 
             {message && <p className="form-message">{message}</p>}
             {!isConnected && <p className="form-message">Connecting to the game server...</p>}
+            {!authToken && <p className="success-message">Guest joining is enabled for unranked rooms.</p>}
           </form>
         </section>
         </>
@@ -1081,6 +1091,7 @@ export default function App() {
             setSettings={setSettings}
             isConnected={isConnected}
             authSession={authSession}
+            guestId={guestId}
           />
         )}
 
@@ -1331,11 +1342,13 @@ interface SettingButtonsProps {
 function AuthPanel({
   session,
   profile,
+  guestId,
   onAuthSuccess,
   onSignOut
 }: {
   session: AuthSession | null;
   profile: PlayerProfile;
+  guestId?: string;
   onAuthSuccess: (session: AuthSession) => void;
   onSignOut: () => void;
 }) {
@@ -1396,8 +1409,12 @@ function AuthPanel({
 
   return (
     <form className="auth-panel" onSubmit={handleSubmit}>
-      <p className="eyebrow">Account required</p>
-      <h2>{mode === "signin" ? "Sign in to play" : "Create account"}</h2>
+      <p className="eyebrow">Account optional</p>
+      <h2>{mode === "signin" ? "Save your rank" : "Create account"}</h2>
+      <p className="auth-helper">
+        {guestId ? `You can play unranked as ${guestId}. ` : ""}
+        Sign in for ranked Elo, friends, achievements, and cloud profile history.
+      </p>
       {mode === "signup" && (
         <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={18} placeholder="Display name" />
       )}
@@ -2130,12 +2147,14 @@ function ProductSettingsScreen({
   settings,
   setSettings,
   isConnected,
-  authSession
+  authSession,
+  guestId
 }: {
   settings: GameSettings;
   setSettings: Dispatch<SetStateAction<GameSettings>>;
   isConnected: boolean;
   authSession: AuthSession | null;
+  guestId: string;
 }) {
   return (
     <section className="glass-panel product-settings-screen">
@@ -2154,7 +2173,7 @@ function ProductSettingsScreen({
         </label>
         <label className="field">
           <span>Account</span>
-          <input value={authSession ? authSession.user.email : "Guest / not signed in"} readOnly />
+          <input value={authSession ? authSession.user.email : `${guestId} / guest mode`} readOnly />
         </label>
         <label className="field">
           <span>Default country pool</span>

@@ -6,9 +6,17 @@ export function getClientId(): string {
   const existing = localStorage.getItem(CLIENT_ID_KEY);
   if (existing) return existing;
 
-  const next = crypto.randomUUID ? crypto.randomUUID() : `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const randomPart = crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const next = `guest-${randomPart}`;
   localStorage.setItem(CLIENT_ID_KEY, next);
   return next;
+}
+
+export function formatGuestId(clientId: string): string {
+  const clean = clientId.replace(/^guest-/, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  return `GUEST-${(clean || "PLAYER").slice(0, 6)}`;
 }
 
 export function rememberRoom(roomCode: string) {

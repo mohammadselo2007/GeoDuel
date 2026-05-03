@@ -1,6 +1,6 @@
 # GeoDuel
 
-GeoDuel is a production-oriented online geography duel: ranked matchmaking, unranked friend rooms, public profiles, friends, achievements, server-owned timers, Supabase accounts, admin permissions, and deployment-ready frontend/backend config.
+GeoDuel is a production-oriented online geography duel: guest-friendly unranked rooms, ranked matchmaking, public profiles, friends, achievements, server-owned timers, Supabase accounts, admin permissions, and deployment-ready frontend/backend config.
 
 Project folder:
 
@@ -172,7 +172,7 @@ Then redeploy both Vercel and Render.
 
 ## Ranked Matchmaking
 
-Ranked no longer uses private invite rooms.
+Ranked requires a signed-in Supabase account because it changes Elo, ranked records, achievements, and leaderboard position. Unranked rooms and practice can be played as a guest.
 
 Ranked flow:
 
@@ -213,13 +213,24 @@ Unranked rooms keep the custom settings:
 
 Unranked rooms:
 
+- Can be created and joined without signing in.
+- Give unsigned players a stable browser guest ID stored in localStorage.
 - Use room codes and invite links.
 - Can be shared with friends.
 - Do not affect Elo.
 - Still use server-owned timers and answer validation.
 
+Guest mode:
+
+- Works for online unranked rooms.
+- Works for solo practice.
+- Keeps a local browser profile/name only.
+- Does not save Elo, friends, achievements, or match history to Supabase.
+- Uses a new guest identity if localStorage is cleared or another browser/device is used.
+
 Friends system:
 
+- Requires a signed-in account.
 - Search public profiles by display name.
 - View another player profile.
 - Send friend requests.

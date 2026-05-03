@@ -747,8 +747,8 @@ async function authorizePlayRequest(
   mode: GameSettings["mode"],
   requireAuth = false
 ): Promise<{ ok: true; user?: Awaited<ReturnType<typeof verifyAuthToken>>; profile?: StoredProfile } | { ok: false; message: string }> {
-  if (!payload.authToken && (requireAuth || mode !== "practice")) {
-    return { ok: false, message: "Sign in to play online matches." };
+  if (!payload.authToken && requireAuth) {
+    return { ok: false, message: "Sign in to play ranked matchmaking and earn Elo." };
   }
 
   if (!payload.authToken) {
@@ -757,6 +757,9 @@ async function authorizePlayRequest(
 
   const user = await verifyAuthToken(payload.authToken);
   if (!user) {
+    if (!requireAuth) {
+      return { ok: true };
+    }
     return { ok: false, message: "Your session expired. Sign in again." };
   }
 

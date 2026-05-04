@@ -1096,11 +1096,14 @@ select {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   padding: 12px;
+  position: relative;
+  z-index: 35;
   animation: slide-up 360ms ease both;
 }
 
 .answer-input-wrap {
   position: relative;
+  z-index: 45;
 }
 
 .active-chip {
@@ -1303,7 +1306,7 @@ select {
 
 .country-autocomplete {
   position: absolute;
-  z-index: 30;
+  z-index: 90;
   top: calc(100% + 8px);
   left: 0;
   right: 0;
@@ -1832,6 +1835,11 @@ select {
 
   .answer-bar {
     grid-template-columns: 1fr;
+  }
+
+  .country-autocomplete {
+    top: auto;
+    bottom: calc(100% + 8px);
   }
 
   .compact,

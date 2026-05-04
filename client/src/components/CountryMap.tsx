@@ -349,13 +349,13 @@ export function CountryMap({ countryId, fallbackPoint, mode, phase, notice, reve
           {microRegion && <MicroRegionFrame />}
 
           {shouldShowContext &&
-            countries.map((country) => {
+            countries.map((country, index) => {
               const id = normalizeCountryId(country.id);
               const countryPath = path(country);
               if (!countryPath) return null;
               return (
                 <path
-                  key={id}
+                  key={`${id || "unknown"}-${index}`}
                   d={countryPath}
                   className={id === countryId ? "country-shape target" : "country-shape context"}
                   filter={id === countryId ? `url(#${glowId})` : undefined}

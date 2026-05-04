@@ -156,7 +156,7 @@ interface RankedQueueEntry {
 const rooms = new Map<string, InternalRoom>();
 const rankedQueue = new Map<string, RankedQueueEntry>();
 const presence = new Map<string, { status: PresenceStatus; roomCode?: string; updatedAt: number }>();
-const DEFAULT_ALLOWED_ORIGINS = ["https://geo-duel.vercel.app", "http://localhost:5173"];
+const DEFAULT_ALLOWED_ORIGINS = ["https://geo-duel.vercel.app", "http://localhost:5173", "http://127.0.0.1:5173"];
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();

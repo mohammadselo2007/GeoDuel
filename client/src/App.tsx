@@ -569,6 +569,7 @@ export default function App() {
     reconnectAttempted.current = false;
     setPlayerId("");
     setGameState(null);
+    setJoinCode("");
     setAnswer("");
     setPendingAction(false);
     setShowHistory(true);
@@ -629,12 +630,17 @@ export default function App() {
       return;
     }
 
+    const isPracticeRoom = response.state.settings.mode === "practice";
     setPlayerId(response.playerId);
     setGameState(response.state);
-    setJoinCode(response.state.roomCode);
+    setJoinCode(isPracticeRoom ? "" : response.state.roomCode);
     rememberObservedPlayers(response.state, profile);
     setLeaderboardVersion((version) => version + 1);
-    rememberRoom(response.state.roomCode);
+    if (isPracticeRoom) {
+      forgetRoom();
+    } else {
+      rememberRoom(response.state.roomCode);
+    }
     setAnswer("");
     playSound("start", response.state.settings.soundEnabled);
   }

@@ -944,6 +944,11 @@ select {
   animation: target-breathe 1200ms ease infinite;
 }
 
+.map-shell.outline .country-shape.context {
+  fill: rgba(115, 139, 151, 0.1);
+  stroke: rgba(204, 231, 242, 0.16);
+}
+
 .silhouette-group {
   animation: target-breathe 1200ms ease infinite;
 }
@@ -973,9 +978,32 @@ select {
   animation: micro-ring-pulse 1500ms ease infinite;
 }
 
+.micro-target-ring circle:nth-child(2) {
+  fill: transparent;
+  stroke: rgba(77, 212, 255, 0.84);
+  stroke-width: 2;
+  stroke-dasharray: 2 5;
+}
+
 .micro-target-ring circle:last-child {
   fill: rgba(244, 185, 66, 0.9);
   stroke: #07111f;
+  stroke-width: 2;
+}
+
+.micro-context-markers {
+  pointer-events: none;
+}
+
+.micro-context-markers circle {
+  fill: rgba(207, 230, 240, 0.48);
+  stroke: rgba(7, 17, 31, 0.72);
+  stroke-width: 1.4;
+}
+
+.micro-context-markers circle.active {
+  fill: rgba(244, 185, 66, 0.86);
+  stroke: rgba(255, 255, 255, 0.92);
   stroke-width: 2;
 }
 
@@ -1254,26 +1282,67 @@ select {
   padding-right: 2px;
 }
 
-.country-menu-card {
-  display: grid;
-  gap: 12px;
+.country-autocomplete {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  border: 1px solid rgba(77, 212, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(5, 12, 24, 0.97);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4), 0 0 28px rgba(77, 212, 255, 0.12);
+  backdrop-filter: blur(16px);
 }
 
-.country-menu-list {
+.country-autocomplete-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(157, 221, 247, 0.12);
+  padding: 9px 11px;
+}
+
+.country-autocomplete-meta span,
+.country-autocomplete-meta small {
+  color: #9dddf7;
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.country-autocomplete-meta small {
+  color: #8fa7b8;
+}
+
+.country-autocomplete-list {
   display: grid;
-  gap: 6px;
-  max-height: 260px;
+  max-height: 220px;
   overflow: auto;
+  padding: 6px;
 }
 
-.country-menu-list span {
-  border: 1px solid rgba(157, 221, 247, 0.12);
+.country-autocomplete-list button {
+  width: 100%;
+  border: 0;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.045);
+  background: transparent;
   color: #edf7ff;
-  padding: 7px 9px;
-  font-size: 0.84rem;
-  font-weight: 850;
+  padding: 10px 11px;
+  text-align: left;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.country-autocomplete-list button:hover,
+.country-autocomplete-list button:focus-visible {
+  outline: none;
+  background: rgba(77, 212, 255, 0.14);
+  color: #ffffff;
 }
 
 .empty-history {
@@ -2169,8 +2238,7 @@ select:focus {
 .metric,
 .achievement-tile,
 .leaderboard-row,
-.history-entry,
-.country-menu-list span {
+.history-entry {
   border-color: rgba(221, 235, 231, 0.1);
   background: rgba(255, 255, 255, 0.04);
 }
@@ -2410,6 +2478,20 @@ select:focus {
 .micro-target-ring circle:first-child {
   fill: rgba(94, 231, 214, 0.08);
   stroke: rgba(255, 244, 214, 0.92);
+}
+
+.micro-target-ring circle:nth-child(2) {
+  stroke: rgba(94, 231, 214, 0.72);
+}
+
+.micro-context-markers circle {
+  fill: rgba(221, 235, 231, 0.42);
+  stroke: rgba(5, 7, 9, 0.72);
+}
+
+.micro-context-markers circle.active {
+  fill: var(--amber);
+  stroke: #fff4d6;
 }
 
 .fallback-locator circle:first-child {

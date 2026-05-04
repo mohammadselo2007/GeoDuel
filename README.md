@@ -195,7 +195,13 @@ Fixed ranked settings:
 - 10 second skip penalty
 - 3 second wrong-answer penalty
 - Forgiving spelling and aliases enabled
-- Country menu disabled
+- Country assist autocomplete disabled
+
+## Micro-Country Map Framing
+
+Very small island and city-state targets use a special micro locator frame. Instead of centering every tiny island as the same dot in open water, GeoDuel keeps related microstates in shared regional frames and adds small unlabeled reference markers for nearby island countries. This keeps countries like Nauru, Tuvalu, Barbados, Saint Lucia, Malta, Bahrain, and Singapore readable without showing country names or using paid map services.
+
+Outline mode still highlights the target, but open-ocean microstates may show faint regional context so multiple nearby island countries do not become visually identical.
 
 ## Unranked Rooms And Friends
 
@@ -207,7 +213,7 @@ Unranked rooms keep the custom settings:
 - Country pool
 - Map mode
 - No Skip mode
-- Country menu
+- Country assist autocomplete
 - Sound
 - Spelling/aliases
 

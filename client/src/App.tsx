@@ -1007,7 +1007,7 @@ export default function App() {
                   className={settings.showCountryMenuEnabled ? "toggle selected" : "toggle"}
                   onClick={() => setSettings((current) => ({ ...current, showCountryMenuEnabled: !current.showCountryMenuEnabled }))}
                 >
-                  Country menu {settings.showCountryMenuEnabled ? "on" : "off"}
+                  Country assist {settings.showCountryMenuEnabled ? "on" : "off"}
                 </button>
               </div>
 
@@ -1193,7 +1193,7 @@ export default function App() {
               <span>first to {gameState.settings.roundsToWin}</span>
               <span>{gameState.matchType === "ranked" ? "ranked matchmaking" : "unranked"}</span>
               <span>{gameState.settings.forgivingSpellingEnabled ? "forgiving spelling" : "strict spelling"}</span>
-              <span>{gameState.settings.showCountryMenuEnabled ? "country menu on" : "country menu off"}</span>
+              <span>{gameState.settings.showCountryMenuEnabled ? "country assist on" : "country assist off"}</span>
             </div>
             {!isPracticeRoom && !isRankedRoom && (
               <div className="invite-copy">
@@ -1260,12 +1260,14 @@ export default function App() {
                 <form className="answer-bar" onSubmit={handleSubmitAnswer}>
                   <div className="answer-input-wrap">
                     <span className="active-chip">{canAnswer ? "Your move" : `${activePlayer?.name ?? "Opponent"} thinking`}</span>
-                    <input
+                    <CountryAnswerInput
                       value={answer}
-                      onChange={(event) => setAnswer(event.target.value)}
+                      onChange={setAnswer}
+                      canAnswer={Boolean(canAnswer)}
+                      pending={pendingAction}
+                      pool={gameState.settings.countryPool}
+                      menuEnabled={gameState.settings.showCountryMenuEnabled}
                       placeholder={canAnswer ? "Type the country name" : "Waiting for turn"}
-                      disabled={!canAnswer || pendingAction}
-                      autoFocus={canAnswer}
                     />
                   </div>
                   <button type="submit" className="primary-action compact" disabled={!canAnswer || pendingAction} title="Submit answer">
@@ -1303,7 +1305,6 @@ export default function App() {
 
             <aside className={`side-rail ${showHistory ? "" : "collapsed"}`}>
               <StatsPanel stats={currentStats} remainingMs={playerId ? gameState.timers[playerId] : 0} />
-              {gameState.settings.showCountryMenuEnabled && <CountryMenu pool={gameState.settings.countryPool} />}
               <HistoryPanel entries={gameState.history} />
             </aside>
           </section>
@@ -2025,7 +2026,7 @@ function PracticeSetup({
           <span>{COUNTRY_POOL_LABELS[settings.countryPool]}</span>
           <span>{settings.mapMode === "outline" ? "outline map" : "neighbor map"}</span>
           <span>{settings.forgivingSpellingEnabled ? "forgiving spelling" : "strict spelling"}</span>
-          <span>{settings.showCountryMenuEnabled ? "country menu on" : "country menu off"}</span>
+          <span>{settings.showCountryMenuEnabled ? "country assist on" : "country assist off"}</span>
         </div>
       </div>
 
@@ -2111,7 +2112,7 @@ function PracticeSetup({
               className={settings.showCountryMenuEnabled ? "toggle selected" : "toggle"}
               onClick={() => setSettings((current) => ({ ...current, showCountryMenuEnabled: !current.showCountryMenuEnabled }))}
             >
-              Country menu {settings.showCountryMenuEnabled ? "on" : "off"}
+              Country assist {settings.showCountryMenuEnabled ? "on" : "off"}
             </button>
           </div>
 
@@ -2219,7 +2220,7 @@ function ProductSettingsScreen({
             className={settings.showCountryMenuEnabled ? "toggle selected" : "toggle"}
             onClick={() => setSettings((current) => ({ ...current, showCountryMenuEnabled: !current.showCountryMenuEnabled }))}
           >
-            Country menu {settings.showCountryMenuEnabled ? "on" : "off"}
+            Country assist {settings.showCountryMenuEnabled ? "on" : "off"}
           </button>
         </div>
       </div>
@@ -2864,37 +2865,95 @@ function CurrentTurnPanel({
         <span>{poolLabel}</span>
         <span>{formatShortTime(currentTurn.elapsedMs)}</span>
         {currentTurn.penaltyMs > 0 && <span>-{formatPenalty(currentTurn.penaltyMs)} penalties</span>}
-        {menuEnabled && <span>assist visible</span>}
+        {menuEnabled && <span>autocomplete on</span>}
       </div>
     </section>
   );
 }
 
-function CountryMenu({ pool }: { pool: GameSettings["countryPool"] }) {
-  const [query, setQuery] = useState("");
+function CountryAnswerInput({
+  value,
+  onChange,
+  canAnswer,
+  pending,
+  pool,
+  menuEnabled,
+  placeholder
+}: {
+  value: string;
+  onChange: Dispatch<SetStateAction<string>>;
+  canAnswer: boolean;
+  pending: boolean;
+  pool: GameSettings["countryPool"];
+  menuEnabled: boolean;
+  placeholder: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const trimmedQuery = value.trim();
   const countryPool = useMemo(
     () => (pool === "world" ? COUNTRIES : COUNTRIES.filter((country) => country.continent === pool)),
     [pool]
   );
-  const filteredCountries = countryPool.filter((country) => country.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const suggestions = useMemo(() => {
+    if (!menuEnabled || !focused || !canAnswer || pending || trimmedQuery.length < 2) return [];
+
+    const normalizedQuery = normalizeCountryMenuSearch(trimmedQuery);
+    return countryPool
+      .filter((country) => {
+        const searchableNames = [country.name, ...(country.aliases ?? [])];
+        return searchableNames.some((name) => normalizeCountryMenuSearch(name).includes(normalizedQuery));
+      })
+      .slice(0, 12);
+  }, [canAnswer, countryPool, focused, menuEnabled, pending, trimmedQuery]);
 
   return (
-    <section className="glass-panel country-menu-card">
-      <div className="panel-title slim">
-        <div>
-          <p className="eyebrow">Assist enabled</p>
-          <h2>Country menu</h2>
+    <>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+        placeholder={placeholder}
+        disabled={!canAnswer || pending}
+        autoFocus={canAnswer}
+        aria-autocomplete={menuEnabled ? "list" : "none"}
+        aria-expanded={suggestions.length > 0}
+      />
+
+      {suggestions.length > 0 && (
+        <div className="country-autocomplete" role="listbox" aria-label="Country suggestions">
+          <div className="country-autocomplete-meta">
+            <span>Country assist</span>
+            <small>{COUNTRY_POOL_LABELS[pool]}</small>
+          </div>
+          <div className="country-autocomplete-list">
+            {suggestions.map((country) => (
+              <button
+                key={country.id}
+                type="button"
+                role="option"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onChange(country.name);
+                  setFocused(false);
+                }}
+              >
+                {country.name}
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="status-badge">{COUNTRY_POOL_LABELS[pool]}</span>
-      </div>
-      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search countries" />
-      <div className="country-menu-list">
-        {filteredCountries.map((country) => (
-          <span key={country.id}>{country.name}</span>
-        ))}
-      </div>
-    </section>
+      )}
+    </>
   );
+}
+
+function normalizeCountryMenuSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {

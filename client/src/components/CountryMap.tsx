@@ -3,6 +3,7 @@ import { geoBounds, geoCentroid, geoMercator, geoPath, type GeoProjection } from
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { feature } from "topojson-client";
 import countries110 from "world-atlas/countries-110m.json";
+import { COUNTRIES } from "../../../shared/countries";
 import { MICRO_COUNTRY_MAP_ID_SET } from "../../../shared/microCountries";
 import type { GamePhase, MapMode } from "../../../shared/types";
 
@@ -51,6 +52,92 @@ const TARGET_PADDING: Record<MapMode, number> = {
   context: 104
 };
 
+type MicroRegionKey =
+  | "alps"
+  | "pyrenees"
+  | "italy"
+  | "malta"
+  | "riviera"
+  | "gulf"
+  | "malacca"
+  | "maldives"
+  | "westAfrica"
+  | "gulfOfGuinea"
+  | "westernIndianOcean"
+  | "caribbean"
+  | "bahamas"
+  | "centralPacific"
+  | "micronesia"
+  | "southPacific";
+
+interface MicroRegionView {
+  key: MicroRegionKey;
+  center: [number, number];
+  contextScale: number;
+  outlineScale?: number;
+  useRegionalOutline?: boolean;
+}
+
+interface MicroContextMarker {
+  id: string;
+  point: [number, number];
+  active: boolean;
+}
+
+const MICRO_REGION_VIEWS: Record<string, MicroRegionView> = {
+  "020": { key: "pyrenees", center: [1.52, 42.51], contextScale: 9000 },
+  "438": { key: "alps", center: [9.55, 47.16], contextScale: 9200 },
+  "492": { key: "riviera", center: [7.75, 43.8], contextScale: 11000 },
+  "674": { key: "italy", center: [12.45, 42.8], contextScale: 6200 },
+  "336": { key: "italy", center: [12.45, 42.8], contextScale: 6200 },
+  "470": { key: "malta", center: [14.35, 36.2], contextScale: 5200, useRegionalOutline: true },
+  "048": { key: "gulf", center: [50.6, 25.5], contextScale: 5200 },
+  "634": { key: "gulf", center: [50.6, 25.5], contextScale: 5200 },
+  "702": { key: "malacca", center: [103.5, 1.55], contextScale: 6200 },
+  "462": { key: "maldives", center: [73.2, 4.2], contextScale: 3000, useRegionalOutline: true },
+  "132": { key: "westAfrica", center: [-21.5, 15.7], contextScale: 2600, useRegionalOutline: true },
+  "678": { key: "gulfOfGuinea", center: [5.8, 0.8], contextScale: 4300, useRegionalOutline: true },
+  "174": { key: "westernIndianOcean", center: [49.5, -12.8], contextScale: 1900, useRegionalOutline: true },
+  "480": { key: "westernIndianOcean", center: [49.5, -12.8], contextScale: 1900, useRegionalOutline: true },
+  "690": { key: "westernIndianOcean", center: [49.5, -12.8], contextScale: 1900, useRegionalOutline: true },
+  "028": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "052": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "212": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "308": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "659": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "662": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "670": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "780": { key: "caribbean", center: [-61.9, 14.8], contextScale: 4200, useRegionalOutline: true },
+  "044": { key: "bahamas", center: [-77.0, 24.2], contextScale: 3200, useRegionalOutline: true },
+  "296": { key: "centralPacific", center: [168.5, 2.9], contextScale: 1900, useRegionalOutline: true },
+  "520": { key: "centralPacific", center: [168.5, 2.9], contextScale: 1900, useRegionalOutline: true },
+  "584": { key: "centralPacific", center: [168.5, 2.9], contextScale: 1900, useRegionalOutline: true },
+  "583": { key: "micronesia", center: [146.5, 7.2], contextScale: 1700, useRegionalOutline: true },
+  "585": { key: "micronesia", center: [146.5, 7.2], contextScale: 1700, useRegionalOutline: true },
+  "798": { key: "southPacific", center: [-178.2, -14.0], contextScale: 1800, useRegionalOutline: true },
+  "882": { key: "southPacific", center: [-178.2, -14.0], contextScale: 1800, useRegionalOutline: true },
+  "776": { key: "southPacific", center: [-178.2, -14.0], contextScale: 1800, useRegionalOutline: true }
+};
+
+const MICRO_REGION_MARKER_IDS: Partial<Record<MicroRegionKey, string[]>> = {
+  alps: ["438"],
+  pyrenees: ["020"],
+  italy: ["336", "674"],
+  malta: ["470"],
+  riviera: ["492"],
+  gulf: ["048", "634"],
+  malacca: ["702"],
+  maldives: ["462"],
+  westAfrica: ["132"],
+  gulfOfGuinea: ["678"],
+  westernIndianOcean: ["174", "480", "690"],
+  caribbean: ["028", "052", "212", "308", "659", "662", "670", "780"],
+  bahamas: ["044"],
+  centralPacific: ["296", "520", "584"],
+  micronesia: ["583", "585"],
+  southPacific: ["798", "882", "776"]
+};
+
 type CountryFeature = Feature<Geometry, Record<string, unknown>> & {
   id?: string | number;
 };
@@ -93,9 +180,12 @@ export function CountryMap({ countryId, fallbackPoint, mode, phase, notice, reve
     const projection = createProjection({ mode, countryId, targetCountry, fallbackPoint });
     const path = geoPath(projection);
     const targetBounds = targetCountry ? path.bounds(targetCountry) : null;
-    const targetCenter = targetCountry && targetBounds ? boundsCenter(targetBounds) : null;
+    const targetGeoPoint = fallbackPoint ?? (targetCountry ? geoCentroid(targetCountry) : undefined);
+    const targetCenter = targetGeoPoint ? projection(targetGeoPoint) : targetCountry && targetBounds ? boundsCenter(targetBounds) : null;
     const fallbackScreenPoint = fallbackPoint ? projection(fallbackPoint) : null;
     const targetScreenPoint = targetCenter ?? fallbackScreenPoint;
+    const microRegion = countryId ? MICRO_REGION_VIEWS[countryId] : undefined;
+    const contextMarkers = microRegion ? buildMicroContextMarkers(projection, microRegion.key, countryId, fallbackPoint) : [];
     const isMicroView =
       isKnownMicroCountry(countryId) ||
       Boolean(fallbackPoint) ||
@@ -105,15 +195,18 @@ export function CountryMap({ countryId, fallbackPoint, mode, phase, notice, reve
       path,
       projection,
       isMicroView,
-      targetScreenPoint
+      targetScreenPoint,
+      microRegion,
+      contextMarkers
     };
   }, [countryId, fallbackPoint, mode, targetCountry]);
 
-  const { path, isMicroView, targetScreenPoint } = mapRender;
+  const { path, isMicroView, targetScreenPoint, microRegion, contextMarkers } = mapRender;
   const targetPath = targetCountry ? path(targetCountry) : undefined;
   const fallbackScreenPoint = !targetCountry ? targetScreenPoint : null;
   const microRingPoint = isMicroView && targetCountry ? targetScreenPoint : null;
   const mapClass = `map-shell ${phase === "reveal" ? "revealing" : ""} ${mode}`;
+  const shouldShowContext = mode === "context" || fallbackScreenPoint || (mode === "outline" && microRegion?.useRegionalOutline);
 
   return (
     <section className={mapClass} aria-label="Country map">
@@ -143,7 +236,7 @@ export function CountryMap({ countryId, fallbackPoint, mode, phase, notice, reve
         </g>
 
         <g clipPath={`url(#${clipId})`}>
-          {(mode === "context" || fallbackScreenPoint) &&
+          {shouldShowContext &&
             countries.map((country) => {
               const id = normalizeCountryId(country.id);
               const countryPath = path(country);
@@ -158,9 +251,24 @@ export function CountryMap({ countryId, fallbackPoint, mode, phase, notice, reve
               );
             })}
 
+          {contextMarkers.length > 1 && (
+            <g className="micro-context-markers" aria-hidden="true">
+              {contextMarkers.map((marker) => (
+                <circle
+                  key={marker.id}
+                  cx={marker.point[0]}
+                  cy={marker.point[1]}
+                  r={marker.active ? 5 : 3.4}
+                  className={marker.active ? "active" : undefined}
+                />
+              ))}
+            </g>
+          )}
+
           {microRingPoint && (
             <g className={targetCountry ? "micro-target-ring" : "micro-target-ring fallback"} filter={`url(#${glowId})`}>
-              <circle cx={microRingPoint[0]} cy={microRingPoint[1]} r={targetCountry ? 26 : 30} />
+              <circle cx={microRingPoint[0]} cy={microRingPoint[1]} r={targetCountry ? 30 : 30} />
+              <circle cx={microRingPoint[0]} cy={microRingPoint[1]} r={targetCountry ? 16 : 14} />
               <circle cx={microRingPoint[0]} cy={microRingPoint[1]} r={targetCountry ? 9 : 6} />
             </g>
           )}
@@ -194,7 +302,7 @@ export function CountryMap({ countryId, fallbackPoint, mode, phase, notice, reve
       </svg>
 
       <div className="map-hud">
-        <span>{mode === "outline" ? "Silhouette scan" : "Neighbor scan"}</span>
+        <span>{microRegion ? "Micro locator" : mode === "outline" ? "Silhouette scan" : "Neighbor scan"}</span>
         <span>{phase === "reveal" ? "Revealing" : "Live"}</span>
       </div>
 
@@ -228,8 +336,18 @@ function createProjection({
   if (targetCountry) {
     const center = fallbackPoint ?? geoCentroid(targetCountry);
     const shouldUseMicroZoom = isKnownMicroCountry(countryId) || Boolean(fallbackPoint) || hasTinyGeoBounds(targetCountry);
+    const microRegion = countryId ? MICRO_REGION_VIEWS[countryId] : undefined;
+    const shouldUseRegionalFrame = Boolean(microRegion && (mode === "context" || microRegion.useRegionalOutline));
 
     if (shouldUseMicroZoom) {
+      if (microRegion && shouldUseRegionalFrame) {
+        projection
+          .center(microRegion.center)
+          .scale(mode === "outline" ? microRegion.outlineScale ?? microRegion.contextScale : microRegion.contextScale)
+          .translate(VIEW_CENTER);
+        return projection;
+      }
+
       projection.center(center).scale(microScale(targetCountry, mode)).translate(VIEW_CENTER);
       shrinkToKeepTargetVisible(projection, targetCountry, mode);
       return projection;
@@ -254,6 +372,47 @@ function createProjection({
     ],
     allCountries
   );
+}
+
+function buildMicroContextMarkers(
+  projection: GeoProjection,
+  regionKey: MicroRegionKey,
+  activeCountryId?: string,
+  activeFallbackPoint?: [number, number]
+): MicroContextMarker[] {
+  const markerIds = MICRO_REGION_MARKER_IDS[regionKey] ?? [];
+  const markers = markerIds.flatMap((mapId) => {
+    const country = COUNTRIES.find((candidate) => candidate.mapId === mapId);
+    if (!country?.fallbackPoint) return [];
+    const point = projection(country.fallbackPoint);
+    if (!point || !isPointInsideMap(point)) return [];
+    return [
+      {
+        id: mapId,
+        point,
+        active: mapId === activeCountryId
+      }
+    ];
+  });
+
+  if (markers.some((marker) => marker.active) || !activeFallbackPoint) return markers;
+
+  const point = projection(activeFallbackPoint);
+  if (!point || !isPointInsideMap(point)) return markers;
+
+  return [
+    ...markers,
+    {
+      id: "active-fallback",
+      point,
+      active: true
+    }
+  ];
+}
+
+function isPointInsideMap(point: [number, number]): boolean {
+  const [x, y] = point;
+  return Number.isFinite(x) && Number.isFinite(y) && x >= -40 && x <= VIEW_WIDTH + 40 && y >= -40 && y <= VIEW_HEIGHT + 40;
 }
 
 function isKnownMicroCountry(countryId?: string): boolean {

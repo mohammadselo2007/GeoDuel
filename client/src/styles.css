@@ -995,10 +995,29 @@ select {
   pointer-events: none;
 }
 
+.micro-region-frame {
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.micro-region-frame circle,
+.micro-region-frame path {
+  fill: none;
+  stroke: rgba(77, 212, 255, 0.1);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 12;
+}
+
 .micro-context-markers circle {
   fill: rgba(207, 230, 240, 0.48);
   stroke: rgba(7, 17, 31, 0.72);
   stroke-width: 1.4;
+}
+
+.micro-context-markers circle.reference {
+  fill: rgba(157, 221, 247, 0.3);
+  stroke: rgba(157, 221, 247, 0.24);
+  stroke-width: 1;
 }
 
 .micro-context-markers circle.active {
@@ -2484,9 +2503,19 @@ select:focus {
   stroke: rgba(94, 231, 214, 0.72);
 }
 
+.micro-region-frame circle,
+.micro-region-frame path {
+  stroke: rgba(94, 231, 214, 0.11);
+}
+
 .micro-context-markers circle {
   fill: rgba(221, 235, 231, 0.42);
   stroke: rgba(5, 7, 9, 0.72);
+}
+
+.micro-context-markers circle.reference {
+  fill: rgba(221, 235, 231, 0.25);
+  stroke: rgba(221, 235, 231, 0.22);
 }
 
 .micro-context-markers circle.active {
